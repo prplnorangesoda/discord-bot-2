@@ -1,16 +1,21 @@
 {
   "name": "discord-bot-2",
-  "module": "index.ts",
+  "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.27.1"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@types/log": "^6.3.3",
+    "@libsql/client": "^0.14.0",
     "discord.js": "^14.16.3",
-    "log": "^6.3.2"
+    "drizzle-orm": "^0.36.0"
   }
 }

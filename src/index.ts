@@ -1,5 +1,5 @@
-import Log from "log";
 import {
+  ApplicationCommandType,
   ChatInputCommandInteraction,
   Client,
   GatewayIntentBits,
@@ -8,26 +8,36 @@ import {
   type Interaction,
 } from "discord.js";
 
+import * as schema from "./db/schema";
+import { Database } from "bun:sqlite";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { eq } from "drizzle-orm";
+
 const fatal = (...args: any[]): never => {
   console.error("Fatal error: ", ...args);
   process.exit(1);
 };
 
-type Response = [false, null] | [true, string];
-type RESTCommand = { name: string; description: string };
-
+type RESTCommand = {
+  type?: number;
+  guild_id?: string;
+  name: string;
+  description: string;
+};
 class CommandHandler {
   static instance: CommandHandler | undefined;
 
-  private handlers: {
-    name: string;
-    description: string;
+  private handlers: (RESTCommand & {
     handler: (args: ChatInputCommandInteraction) => void;
-  }[] = [
+  })[] = [
     {
       name: "ping",
       description: "Ping!",
-      handler: async (interaction) => await interaction.reply("Pong!"),
+      type: ApplicationCommandType.ChatInput,
+      handler: async (interaction) => {
+        console.log("Ping run");
+        await interaction.reply("Pong!");
+      },
     },
   ];
 
@@ -60,17 +70,43 @@ class CommandHandler {
   }
 }
 
-export default async function main() {
-  const mainLog = Log.get("main");
-  const DISCORD_API_TOKEN = Bun.env.DISCORD_API_TOKEN!;
-  const CLIENT_ID = Bun.env.CLIENT_ID!;
-  if (DISCORD_API_TOKEN === undefined) {
-    fatal("No discord API token found.");
-  }
-  if (CLIENT_ID === undefined) {
-    fatal("No client ID found.");
-  }
+async function main() {
+  const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN!;
+  const CLIENT_ID = process.env.CLIENT_ID!;
+  const DB_FILE_NAME = process.env.DB_FILE_NAME!;
+  if (DISCORD_API_TOKEN === undefined) fatal("No discord API token found.");
+  if (CLIENT_ID === undefined) fatal("No client ID found.");
+  if (DB_FILE_NAME === undefined) fatal("No DB file name found.");
 
+  console.info("Creating database");
+  const sqlite = new Database(DB_FILE_NAME, { create: true, strict: true });
+  console.log(sqlite.exec("SELECT 'hello_world'"));
+  const db = drizzle(sqlite);
+
+  const user: typeof schema.usersTable.$inferInsert = {
+    name: "example",
+    age: 12,
+    email: "john@john.com",
+  };
+
+  await db.insert(schema.usersTable).values(user);
+  console.log("User created");
+
+  const users = await db.select().from(schema.usersTable);
+  console.log("All users from the database: ", users);
+
+  await db
+    .update(schema.usersTable)
+    .set({
+      age: 31,
+    })
+    .where(eq(schema.usersTable.email, user.email));
+  console.log("User info updated!");
+
+  await db
+    .delete(schema.usersTable)
+    .where(eq(schema.usersTable.email, user.email));
+  console.log("User deleted!");
   console.info("Creating command handler");
   const command_handler = new CommandHandler();
   const commands: RESTCommand[] = command_handler.getHandlersForRest();
@@ -88,6 +124,7 @@ export default async function main() {
   } catch (error) {
     fatal("Error reloading application commands:", error);
   }
+
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   client.on("ready", (client) => {
     console.log(`Client logged in. ${client.user.tag}`);
@@ -97,6 +134,4 @@ export default async function main() {
   await client.login(DISCORD_API_TOKEN);
 }
 
-(() => {
-  main();
-})();
+main();
