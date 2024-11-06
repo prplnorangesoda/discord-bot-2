@@ -6,3 +6,8 @@ export const usersTable = sqliteTable("users_table", {
   age: int().notNull(),
   email: text().notNull().unique(),
 });
+
+export const exampleTable = sqliteTable("command_table", {
+  id: int().primaryKey({ autoIncrement: true }),
+  time: int({ mode: "timestamp" }).$defaultFn(() => new Date()),
+});

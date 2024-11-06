@@ -11,9 +11,10 @@ import {
 import { type Handler, type RESTCommand } from "./types";
 import * as schema from "./db/schema";
 import { Database } from "bun:sqlite";
-import { drizzle } from "drizzle-orm/bun-sqlite";
+import { BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
 import { eq } from "drizzle-orm";
 import { PingCommand, SpeakersCommand } from "./cmds";
+import DatabaseTestCmd from "cmds/dbtest";
 
 const fatal = (...args: any[]): never => {
   console.error("[Fatal error]", ...args);
@@ -23,28 +24,29 @@ const fatal = (...args: any[]): never => {
 class CommandHandler {
   static instance: CommandHandler | undefined;
 
-  private handlers: Handler[] = [
-    {
-      name: "ping",
-      description: "Ping!",
-      type: ApplicationCommandType.ChatInput,
-      handler: new PingCommand(),
-    },
-    {
-      name: "ping2",
-      description: "Ping! squared",
-      type: ApplicationCommandType.ChatInput,
-      handler: new PingCommand(),
-    },
-    {
-      name: "stupid_noob",
-      description: "speakro",
-      type: ApplicationCommandType.ChatInput,
-      handler: new SpeakersCommand(),
-    },
-  ];
+  private handlers: Handler[];
 
-  public constructor() {
+  public constructor(private db_handle: BunSQLiteDatabase) {
+    this.handlers = [
+      {
+        name: "ping",
+        description: "Ping!",
+        type: ApplicationCommandType.ChatInput,
+        handler: new PingCommand(db_handle),
+      },
+      {
+        name: "dbtest",
+        description: "test a command which queries the database",
+        type: ApplicationCommandType.ChatInput,
+        handler: new DatabaseTestCmd(db_handle),
+      },
+      {
+        name: "stupid_noob",
+        description: "speakro",
+        type: ApplicationCommandType.ChatInput,
+        handler: new SpeakersCommand(db_handle),
+      },
+    ];
     if (CommandHandler.instance) return CommandHandler.instance;
     CommandHandler.instance = this;
   }
@@ -61,7 +63,7 @@ class CommandHandler {
     }
     return ret;
   }
-  public registerCommands(client: Client<true>) {
+  public registerCommands(client: Client) {
     client.on("interactionCreate", async (interaction) => {
       if (interaction.isButton()) {
       }
@@ -89,32 +91,12 @@ async function main() {
   const sqlite = new Database(DB_FILE_NAME, { create: true, strict: true });
   const db = drizzle(sqlite);
 
-  const user: typeof schema.usersTable.$inferInsert = {
-    name: "example",
-    age: 12,
-    email: "john@john.com",
-  };
+  console.log(
+    await db.insert(schema.exampleTable).values({}).returning().execute()
+  );
 
-  await db.insert(schema.usersTable).values(user);
-  console.log("User created");
-
-  const users = await db.select().from(schema.usersTable);
-  console.log("All users from the database: ", users);
-
-  await db
-    .update(schema.usersTable)
-    .set({
-      age: 31,
-    })
-    .where(eq(schema.usersTable.email, user.email));
-  console.log("User info updated!");
-
-  await db
-    .delete(schema.usersTable)
-    .where(eq(schema.usersTable.email, user.email));
-  console.log("User deleted!");
   console.info("Creating command handler");
-  const command_handler = new CommandHandler();
+  const command_handler = new CommandHandler(db);
   const commands: RESTCommand[] = command_handler.getHandlersForRest();
 
   console.info("Refreshing slash commands...");
@@ -132,9 +114,11 @@ async function main() {
   }
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+  command_handler.registerCommands(client);
+
   client.on("ready", (client) => {
     console.log(`Client logged in. ${client.user.tag}`);
-    command_handler.registerCommands(client);
   });
 
   await client.login(DISCORD_API_TOKEN);
