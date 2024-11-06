@@ -8,36 +8,39 @@ import {
   type Interaction,
 } from "discord.js";
 
+import { type Handler, type RESTCommand } from "./types";
 import * as schema from "./db/schema";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { eq } from "drizzle-orm";
+import { PingCommand, SpeakersCommand } from "./cmds";
 
 const fatal = (...args: any[]): never => {
-  console.error("Fatal error: ", ...args);
-  process.exit(1);
+  console.error("[Fatal error]", ...args);
+  throw new Error("Fatal error");
 };
 
-type RESTCommand = {
-  type?: number;
-  guild_id?: string;
-  name: string;
-  description: string;
-};
 class CommandHandler {
   static instance: CommandHandler | undefined;
 
-  private handlers: (RESTCommand & {
-    handler: (args: ChatInputCommandInteraction) => void;
-  })[] = [
+  private handlers: Handler[] = [
     {
       name: "ping",
       description: "Ping!",
       type: ApplicationCommandType.ChatInput,
-      handler: async (interaction) => {
-        console.log("Ping run");
-        await interaction.reply("Pong!");
-      },
+      handler: new PingCommand(),
+    },
+    {
+      name: "ping2",
+      description: "Ping! squared",
+      type: ApplicationCommandType.ChatInput,
+      handler: new PingCommand(),
+    },
+    {
+      name: "stupid_noob",
+      description: "speakro",
+      type: ApplicationCommandType.ChatInput,
+      handler: new SpeakersCommand(),
     },
   ];
 
@@ -52,18 +55,22 @@ class CommandHandler {
       ret.push({
         name: handler.name,
         description: handler.description,
+        type: handler.type,
+        guild_id: handler.guild_id,
       });
     }
     return ret;
   }
   public registerCommands(client: Client<true>) {
     client.on("interactionCreate", async (interaction) => {
+      if (interaction.isButton()) {
+      }
       if (!interaction.isChatInputCommand()) return;
 
       for (let i = 0; i < this.handlers.length; i++) {
         let handler = this.handlers[i];
         if (interaction.commandName === handler.name) {
-          handler.handler(interaction);
+          handler.handler.create(interaction);
         }
       }
     });
@@ -80,7 +87,6 @@ async function main() {
 
   console.info("Creating database");
   const sqlite = new Database(DB_FILE_NAME, { create: true, strict: true });
-  console.log(sqlite.exec("SELECT 'hello_world'"));
   const db = drizzle(sqlite);
 
   const user: typeof schema.usersTable.$inferInsert = {
