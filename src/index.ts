@@ -15,6 +15,7 @@ import { BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
 import { eq } from "drizzle-orm";
 import { PingCommand, SpeakersCommand } from "./cmds";
 import DatabaseTestCmd from "cmds/dbtest";
+import ExampleInteractionCmd from "cmds/example";
 
 const fatal = (...args: any[]): never => {
   console.error("[Fatal error]", ...args);
@@ -46,6 +47,12 @@ class CommandHandler {
         type: ApplicationCommandType.ChatInput,
         handler: new SpeakersCommand(db_handle),
       },
+      {
+        name: "interaction_test",
+        description: "example",
+        type: ApplicationCommandType.ChatInput,
+        handler: new ExampleInteractionCmd(db_handle),
+      },
     ];
     if (CommandHandler.instance) return CommandHandler.instance;
     CommandHandler.instance = this;
@@ -68,11 +75,16 @@ class CommandHandler {
       if (interaction.isButton()) {
       }
       if (!interaction.isChatInputCommand()) return;
-
+      let begin = performance.now();
       for (let i = 0; i < this.handlers.length; i++) {
         let handler = this.handlers[i];
         if (interaction.commandName === handler.name) {
-          handler.handler.create(interaction);
+          let res = await handler.handler.create(interaction);
+          console.info(
+            `COMMAND "${handler.name}" .create() RAN IN ${
+              performance.now() - begin
+            }ms`
+          );
         }
       }
     });

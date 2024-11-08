@@ -6,7 +6,7 @@ import * as schema from "db/schema";
 
 export default class SpeakersCommand implements Command {
   public constructor(private db_handle: BunSQLiteDatabase) {}
-  public create(interaction: ChatInputCommandInteraction) {
+  public async create(interaction: ChatInputCommandInteraction) {
     interaction.reply("Noob down");
   }
 }

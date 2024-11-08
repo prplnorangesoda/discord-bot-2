@@ -8,7 +8,7 @@ export type RESTCommand = {
   description: string;
 };
 export interface Command {
-  create: (interaction: ChatInputCommandInteraction) => void;
+  create: (interaction: ChatInputCommandInteraction) => Promise<any>;
 }
 export type Handler = RESTCommand & {
   handler: Command;
