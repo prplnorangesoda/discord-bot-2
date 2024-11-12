@@ -22,6 +22,10 @@ const fatal = (...args: any[]): never => {
   throw new Error("Fatal error");
 };
 
+export const filterCreator = (i: Interaction) => {
+  return (button_interaction: Interaction) =>
+    button_interaction.user.id === i.user.id;
+};
 class CommandHandler {
   static instance: CommandHandler | undefined;
 
@@ -33,25 +37,25 @@ class CommandHandler {
         name: "ping",
         description: "Ping!",
         type: ApplicationCommandType.ChatInput,
-        handler: new PingCommand(db_handle),
+        command: new PingCommand(db_handle),
       },
       {
         name: "dbtest",
         description: "test a command which queries the database",
         type: ApplicationCommandType.ChatInput,
-        handler: new DatabaseTestCmd(db_handle),
+        command: new DatabaseTestCmd(db_handle),
       },
       {
         name: "stupid_noob",
         description: "speakro",
         type: ApplicationCommandType.ChatInput,
-        handler: new SpeakersCommand(db_handle),
+        command: new SpeakersCommand(db_handle),
       },
       {
         name: "interaction_test",
         description: "example",
         type: ApplicationCommandType.ChatInput,
-        handler: new ExampleInteractionCmd(db_handle),
+        command: new ExampleInteractionCmd(db_handle),
       },
     ];
     if (CommandHandler.instance) return CommandHandler.instance;
@@ -72,14 +76,12 @@ class CommandHandler {
   }
   public registerCommands(client: Client) {
     client.on("interactionCreate", async (interaction) => {
-      if (interaction.isButton()) {
-      }
       if (!interaction.isChatInputCommand()) return;
       let begin = performance.now();
       for (let i = 0; i < this.handlers.length; i++) {
         let handler = this.handlers[i];
         if (interaction.commandName === handler.name) {
-          let res = await handler.handler.create(interaction);
+          let res = await handler.command.create(interaction);
           console.info(
             `COMMAND "${handler.name}" .create() RAN IN ${
               performance.now() - begin

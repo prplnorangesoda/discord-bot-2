@@ -11,5 +11,5 @@ export interface Command {
   create: (interaction: ChatInputCommandInteraction) => Promise<any>;
 }
 export type Handler = RESTCommand & {
-  handler: Command;
+  command: Command;
 };
