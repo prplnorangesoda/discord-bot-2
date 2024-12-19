@@ -8,7 +8,7 @@ import {
   type Interaction,
 } from "discord.js";
 
-import { type Handler, type RESTCommand } from "./types";
+import { ParameterType, type Handler, type RESTCommand } from "./types";
 import * as schema from "./db/schema";
 import { Database } from "bun:sqlite";
 import { BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm";
 import { PingCommand, SpeakersCommand } from "./cmds";
 import DatabaseTestCmd from "cmds/dbtest";
 import ExampleInteractionCmd from "cmds/example";
+import ScrapeUsersCommand from "cmds/scrapeusers";
 
 const fatal = (...args: any[]): never => {
   console.error("[Fatal error]", ...args);
@@ -57,6 +58,22 @@ class CommandHandler {
         type: ApplicationCommandType.ChatInput,
         command: new ExampleInteractionCmd(db_handle),
       },
+      {
+        name: "scrape_for_role",
+        description:
+          "scrapes all users with a specified role and writes it to a local file",
+        type: ApplicationCommandType.ChatInput,
+        command: new ScrapeUsersCommand(db_handle),
+        default_member_permissions: (1 << 28).toString(10),
+        params: [
+          {
+            name: "role",
+            description: "the role to scrape for",
+            required: true,
+            type: ParameterType.ROLE,
+          },
+        ],
+      },
     ];
     if (CommandHandler.instance) return CommandHandler.instance;
     CommandHandler.instance = this;
@@ -66,6 +83,8 @@ class CommandHandler {
     let ret: RESTCommand[] = [];
     for (let handler of this.handlers) {
       ret.push({
+        default_member_permissions: handler.default_member_permissions,
+        options: handler.params,
         name: handler.name,
         description: handler.description,
         type: handler.type,
@@ -81,12 +100,17 @@ class CommandHandler {
       for (let i = 0; i < this.handlers.length; i++) {
         let handler = this.handlers[i];
         if (interaction.commandName === handler.name) {
-          let res = await handler.command.create(interaction);
-          console.info(
-            `COMMAND "${handler.name}" .create() RAN IN ${
-              performance.now() - begin
-            }ms`
-          );
+          let res;
+          try {
+            res = await handler.command.create(interaction);
+            console.info(
+              `COMMAND "${handler.name}" .create() RAN SUCCESSFULLY ✅ IN ${
+                performance.now() - begin
+              }ms`
+            );
+          } catch (why) {
+            console.error(`Command ${handler.name} .create() failed: `, why);
+          }
         }
       }
     });
@@ -127,7 +151,9 @@ async function main() {
     fatal("Error reloading application commands:", error);
   }
 
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  });
 
   command_handler.registerCommands(client);
 
@@ -138,4 +164,6 @@ async function main() {
   await client.login(DISCORD_API_TOKEN);
 }
 
-main();
+main()
+  .then(() => console.log("Main finished."))
+  .catch(fatal);
