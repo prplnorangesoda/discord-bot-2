@@ -3,20 +3,24 @@ import {
   ChatInputCommandInteraction,
   Client,
   GatewayIntentBits,
+  PermissionFlagsBits,
   REST,
   Routes,
   type Interaction,
 } from "discord.js";
-
 import { ParameterType, type Handler, type RESTCommand } from "./types";
 import * as schema from "./db/schema";
 import { Database } from "bun:sqlite";
 import { BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
-import { eq } from "drizzle-orm";
-import { PingCommand, SpeakersCommand } from "./cmds";
-import DatabaseTestCmd from "cmds/dbtest";
-import ExampleInteractionCmd from "cmds/example";
-import ScrapeUsersCommand from "cmds/scrapeusers";
+import {
+  PingCommand,
+  SpeakersCommand,
+  DatabaseTestCmd,
+  ExampleInteractionCmd,
+  ScrapeUsersCmd,
+} from "./cmds";
+import WarnCmd from "cmds/moderation/warn";
+import WarningsListCmd from "cmds/moderation/warningslist";
 
 const fatal = (...args: any[]): never => {
   console.error("[Fatal error]", ...args);
@@ -29,10 +33,14 @@ export const filterCreator = (i: Interaction) => {
 };
 class CommandHandler {
   static instance: CommandHandler | undefined;
-
+  // @ts-expect-error
   private handlers: Handler[];
+  // @ts-expect-error
+  private chat_handlers: Handler[];
 
   public constructor(private db_handle: BunSQLiteDatabase) {
+    if (CommandHandler.instance) return CommandHandler.instance;
+    CommandHandler.instance = this;
     this.handlers = [
       {
         name: "ping",
@@ -63,8 +71,9 @@ class CommandHandler {
         description:
           "scrapes all users with a specified role and writes it to a local file",
         type: ApplicationCommandType.ChatInput,
-        command: new ScrapeUsersCommand(db_handle),
-        default_member_permissions: (1 << 28).toString(10),
+        command: new ScrapeUsersCmd(db_handle),
+        default_member_permissions:
+          PermissionFlagsBits.ManageRoles.toString(10),
         params: [
           {
             name: "role",
@@ -74,9 +83,44 @@ class CommandHandler {
           },
         ],
       },
+      {
+        name: "warn",
+        description: "warn a user for a custom reason",
+        type: ApplicationCommandType.ChatInput,
+        command: new WarnCmd(db_handle),
+        default_member_permissions:
+          PermissionFlagsBits.ModerateMembers.toString(10),
+        params: [
+          {
+            name: "victim",
+            description: "the user to warn",
+            required: true,
+            type: ParameterType.USER,
+          },
+          {
+            name: "reason",
+            description: "reason for warning. will be shown to user",
+            required: true,
+            type: ParameterType.STRING,
+          },
+          {
+            name: "notes",
+            description: "any moderator note, will not be shown to user",
+            required: false,
+            type: ParameterType.STRING,
+          },
+        ],
+      },
+      {
+        name: "warnings",
+        description: "list warnings, optionally filtered",
+        type: ApplicationCommandType.ChatInput,
+        command: new WarningsListCmd(db_handle),
+      },
     ];
-    if (CommandHandler.instance) return CommandHandler.instance;
-    CommandHandler.instance = this;
+    this.chat_handlers = this.handlers.filter(
+      (val) => val.type === ApplicationCommandType.ChatInput
+    );
   }
 
   public getHandlersForRest(): RESTCommand[] {
@@ -95,23 +139,27 @@ class CommandHandler {
   }
   public registerCommands(client: Client) {
     client.on("interactionCreate", async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
       let begin = performance.now();
-      for (let i = 0; i < this.handlers.length; i++) {
-        let handler = this.handlers[i];
-        if (interaction.commandName === handler.name) {
-          let res;
-          try {
-            res = await handler.command.create(interaction);
-            console.info(
-              `COMMAND "${handler.name}" .create() RAN SUCCESSFULLY ✅ IN ${
-                performance.now() - begin
-              }ms`
-            );
-          } catch (why) {
-            console.error(`Command ${handler.name} .create() failed: `, why);
+
+      if (interaction.isChatInputCommand()) {
+        for (let i = 0; i < this.chat_handlers.length; i++) {
+          let handler = this.chat_handlers[i];
+          if (interaction.commandName === handler.name) {
+            let res;
+            try {
+              res = await handler.command.create(interaction);
+              console.info(
+                `COMMAND "${handler.name}" .create() RAN SUCCESSFULLY ✅ IN ${
+                  performance.now() - begin
+                }ms`
+              );
+            } catch (why) {
+              console.error(`Command ${handler.name} .create() failed: `, why);
+            }
           }
         }
+      } else if (interaction.isUserContextMenuCommand()) {
+        interaction.reply("This should never happen.");
       }
     });
   }
@@ -165,5 +213,9 @@ async function main() {
 }
 
 main()
-  .then(() => console.log("Main finished."))
-  .catch(fatal);
+  .then(() => {
+    console.log("Main finished.");
+  })
+  .catch((err) => {
+    throw err;
+  });

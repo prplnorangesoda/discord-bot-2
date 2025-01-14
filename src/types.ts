@@ -6,7 +6,13 @@ export enum ParameterType {
   "SUB_COMMAND_GROUP" = 2,
   "STRING" = 3,
   "INTEGER" = 4,
+  "BOOLEAN" = 5,
+  "USER" = 6,
+  "CHANNEL" = 7,
   "ROLE" = 8,
+  "MENTIONABLE" = 9,
+  "NUMBER" = 10,
+  "ATTACHMENT" = 11,
 }
 export type Parameter = {
   type: ParameterType;
@@ -20,7 +26,7 @@ export type RESTCommand = {
   type?: number;
   guild_id?: string;
   name: string;
-  description: string;
+  description?: string;
 };
 export interface Command {
   create: (interaction: ChatInputCommandInteraction) => Promise<any>;
