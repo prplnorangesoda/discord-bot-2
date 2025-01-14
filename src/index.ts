@@ -116,6 +116,14 @@ class CommandHandler {
         description: "list warnings, optionally filtered",
         type: ApplicationCommandType.ChatInput,
         command: new WarningsListCmd(db_handle),
+        params: [
+          {
+            name: "user",
+            description: "the user to filter warnings by",
+            required: false,
+            type: ParameterType.USER,
+          },
+        ],
       },
     ];
     this.chat_handlers = this.handlers.filter(
@@ -144,6 +152,7 @@ class CommandHandler {
       if (interaction.isChatInputCommand()) {
         for (let i = 0; i < this.chat_handlers.length; i++) {
           let handler = this.chat_handlers[i];
+
           if (interaction.commandName === handler.name) {
             let res;
             try {
@@ -169,9 +178,14 @@ async function main() {
   const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN!;
   const CLIENT_ID = process.env.CLIENT_ID!;
   const DB_FILE_NAME = process.env.DB_FILE_NAME!;
-  if (DISCORD_API_TOKEN === undefined) fatal("No discord API token found.");
-  if (CLIENT_ID === undefined) fatal("No client ID found.");
-  if (DB_FILE_NAME === undefined) fatal("No DB file name found.");
+  if (DISCORD_API_TOKEN === undefined)
+    fatal(
+      "No discord API token found. Specify DISCORD_API_TOKEN in a .env file."
+    );
+  if (CLIENT_ID === undefined)
+    fatal("No client ID found. Specify CLIENT_ID in a .env file.");
+  if (DB_FILE_NAME === undefined)
+    fatal("No DB file name found. Specify DB_FILE_NAME in a .env file.");
 
   console.info("Creating database");
   const sqlite = new Database(DB_FILE_NAME, { create: true, strict: true });

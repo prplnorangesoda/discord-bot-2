@@ -23,5 +23,6 @@ export const warningsTable = sqliteTable("warnings_table", {
   moderator_id: text(),
   victim_id: text().notNull(),
   reason: text().notNull(),
+  notes: text(),
   severity: int().default(-1).notNull(),
 });

@@ -11,17 +11,21 @@ import type { Command } from "types";
 export default class WarnCmd implements Command {
   public constructor(private db_handle: BunSQLiteDatabase) {}
   create = async (interaction: ChatInputCommandInteraction) => {
+    let defer = interaction.deferReply();
     if (!interaction.inGuild()) return;
     if (!interaction.memberPermissions.has("ModerateMembers")) {
-      interaction.reply({
-        content: "Insufficient permissions. You require: MODERATE_MEMBERS",
-        options: { flags: MessageFlags.Ephemeral },
-      });
+      interaction.ephemeral = true;
+      let initial = await defer;
+      initial.edit("Insufficient permissions. You require: MODERATE_MEMBERS");
+      setTimeout(() => {
+        initial.delete();
+      }, 5000);
       return;
     }
     let user = interaction.options.getUser("victim", true);
     let reason_raw = interaction.options.getString("reason", true);
-    let reply = interaction.reply(`Warning \`${user.username}\`...`);
+    let initial = await defer;
+    initial.edit(`Warning \`${user.username}\`...`);
     let reason = reason_raw.split("`").join("<GRAVE>");
     let warning_result: (typeof warningsTable.$inferSelect)[] | null = null;
     try {
@@ -37,7 +41,7 @@ export default class WarnCmd implements Command {
         .returning()
         .execute();
     } catch (why) {
-      (await reply).edit(
+      interaction.followUp(
         "Could not add the new warning to the database. Still going ahead and warning the user, but this won't show up in history.\n" +
           "Reason why: " +
           JSON.stringify(why)
@@ -56,10 +60,10 @@ export default class WarnCmd implements Command {
           }`
       )
       .then(async () => {
-        (await reply).edit(`\`${user.username}\` **successfully warned.**`);
+        initial.edit(`\`${user.username}\` **successfully warned.**`);
       })
       .catch(async (reason) =>
-        (await reply).edit(
+        initial.edit(
           "I was unable to send the message to the user.\nWhy: ```json\n" +
             JSON.stringify(reason, undefined, 2).split("`").join("<GRAVE>") +
             "```"
