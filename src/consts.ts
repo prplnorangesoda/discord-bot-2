@@ -1,1 +1,3 @@
-export const DEEP_ORANGE = 0xffa200;
+export namespace Colors {
+  export const DEEP_ORANGE = 0xffa200;
+}
